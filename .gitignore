@@ -1,0 +1,6 @@
+# build folder
+build
+# VS Code folder
+.vscode
+# Fortran built modules
+**/*.mod
