@@ -48,9 +48,10 @@ CONTAINS
     CLASS(board), VALUE :: this
     CLASS(move), INTENT(in) :: m
     CLASS(board), ALLOCATABLE :: child
-    INTEGER(1) :: piece, rook_square, rook_piece, new_rook_square
-    INTEGER(1) :: promoted_piece
+    INTEGER(1) :: piece, rook_square, rook_piece, new_rook_square, actual_pawn_square
+    INTEGER(1) :: promoted_piece, captured_piece
     ALLOCATE(child, source=this)
+    piece = child%mailbox(m%from_square)
     IF (ABS(piece) == KING .AND. ABS(m%from_square - m%to_square) == 16) THEN
        rook_square = MERGE(56_1 + IAND(m%from_square, 7_1), IAND(m%from_square, 7_1), ISHFT(m%from_square, -3) > 4)
        CALL child%set_piece(m%from_square, NONE)
@@ -69,6 +70,7 @@ CONTAINS
        child%en_passant = 0_1
     ELSE
        promoted_piece = m%promoted_piece
+       captured_piece = m%captured_piece
        CALL child%set_piece(m%from_square, NONE)
        CALL child%set_piece(m%to_square, MERGE(promoted_piece, piece, promoted_piece /= 0))
        IF (ABS(piece) == king) THEN
@@ -91,8 +93,21 @@ CONTAINS
        IF (child%side_to_move == white) THEN
           child%move_number = child%move_number + 1_2
        END IF
+       IF (m%en_passant) THEN
+          actual_pawn_square = m%to_square + child%side_to_move
+          CALL child%set_piece(actual_pawn_square, NONE)
+       END IF
+       IF (ABS(piece) == pawn .AND. ABS(m%from_square - m%to_square) == 2) THEN
+          child%en_passant = ISHFT(m%from_square, -3) + 1_1
+       ELSE
+          child%en_passant = 0
+       END IF
+       IF (ABS(piece) == pawn .OR. captured_piece /= NONE) THEN
+          child%halfmove_counter = 0
+       ELSE
+          child%halfmove_counter = child%halfmove_counter + 1_1
+       END IF
     END IF
-    piece = child%mailbox(m%from_square)
   END FUNCTION make_move
 
   SUBROUTINE set_piece(this, square, piece)
