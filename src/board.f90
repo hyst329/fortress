@@ -50,7 +50,7 @@ CONTAINS
     CLASS(board), ALLOCATABLE :: child
     INTEGER(1) :: piece, rook_square, rook_piece, new_rook_square
     INTEGER(1) :: promoted_piece
-    ALLOCATE(child, source=this)
+    ALLOCATE (child, source=this)
     IF (ABS(piece) == KING .AND. ABS(m%from_square - m%to_square) == 16) THEN
        rook_square = MERGE(56_1 + IAND(m%from_square, 7_1), IAND(m%from_square, 7_1), ISHFT(m%from_square, -3) > 4)
        CALL child%set_piece(m%from_square, NONE)
