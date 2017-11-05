@@ -18,6 +18,10 @@ endif()
 set(CMAKE_Fortran_FLAGS_DEBUG "${CMAKE_Fortran_FLAGS_DEBUG} ${bounds}")
 set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} ${dialect}")
 
+# Attack tables files
+configure_file(data/fortress_rattacks.dat fortress_rattacks.dat COPYONLY)
+configure_file(data/fortress_battacks.dat fortress_battacks.dat COPYONLY)
+
 #
 # Compile.
 #

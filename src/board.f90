@@ -19,6 +19,7 @@ MODULE board_module
    CONTAINS
      PROCEDURE :: make_move
      PROCEDURE :: set_piece
+     PROCEDURE :: combined_bitboard
   END TYPE board
 
 CONTAINS
@@ -33,6 +34,12 @@ CONTAINS
        res = res + INT(temp(i)*65536)
     END DO
   END FUNCTION generate_random_int64
+
+  SUBROUTINE initialise
+    USE move_module
+    CALL initialise_zobrist_tables
+    CALL read_attacks
+  END SUBROUTINE initialise
 
   SUBROUTINE initialise_zobrist_tables
     INTEGER :: i, j
@@ -122,5 +129,15 @@ CONTAINS
     this%hash = IEOR(this%hash, zobrist_tables(square, piece))
     this%mailbox(square) = piece
   END SUBROUTINE set_piece
+
+  FUNCTION combined_bitboard(this, color) RESULT(res)
+    CLASS(board), INTENT(in) :: this
+    INTEGER(1) :: color, i
+    INTEGER(8) :: res
+    res = 0
+    DO i = pawn, king
+       res = IOR(res, this%bitboards(color * king))
+    END DO
+  END FUNCTION combined_bitboard
 
 END MODULE board_module

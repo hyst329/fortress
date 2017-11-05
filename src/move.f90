@@ -49,9 +49,116 @@ MODULE move_module
        Z"0044280000000000", Z"0088500000000000", Z"0010a00000000000", &
        Z"0020400000000000"]
 
+  INTEGER, PARAMETER :: rook_bits(64) = [ &
+       12, 11, 11, 11, 11, 11, 11, 12, &
+       11, 10, 10, 10, 10, 10, 10, 11, &
+       11, 10, 10, 10, 10, 10, 10, 11, &
+       11, 10, 10, 10, 10, 10, 10, 11, &
+       11, 10, 10, 10, 10, 10, 10, 11, &
+       11, 10, 10, 10, 10, 10, 10, 11, &
+       11, 10, 10, 10, 10, 10, 10, 11, &
+       12, 11, 11, 11, 11, 11, 11, 12]
+
+  INTEGER, PARAMETER :: bishop_bits(64) = [&
+       6, 5, 5, 5, 5, 5, 5, 6, &
+       5, 5, 5, 5, 5, 5, 5, 5, &
+       5, 5, 7, 7, 7, 7, 5, 5, &
+       5, 5, 7, 9, 9, 7, 5, 5, &
+       5, 5, 7, 9, 9, 7, 5, 5, &
+       5, 5, 7, 7, 7, 7, 5, 5, &
+       5, 5, 5, 5, 5, 5, 5, 5, &
+       6, 5, 5, 5, 5, 5, 5, 6]
+
+  INTEGER(8) :: rook_attacks(0:63, 0:4095), bishop_attacks(0:63, 0:511)
+
   TYPE move
      INTEGER(1) :: from_square, to_square, captured_piece, promoted_piece
      LOGICAL :: en_passant
   END TYPE move
+
+CONTAINS
+  SUBROUTINE read_attacks()
+    INTEGER :: i
+    OPEN(unit=28, file="fortress_rattacks.dat", access="stream", form="unformatted", status="old")
+    OPEN(unit=29, file="fortress_battacks.dat", access="stream", form="unformatted", status="old")
+    DO I = 0, 63
+       READ (28) rook_attacks(i, :)
+       READ (29) bishop_attacks(i, :)
+    END DO
+    CLOSE(28)
+    CLOSE(29)
+  END SUBROUTINE read_attacks
+
+  SUBROUTINE generate_moves_pawn(b, square, buffer, index)
+    USE board_module
+    TYPE(board), INTENT(in) :: b
+    INTEGER, INTENT(in) :: square
+    TYPE(move), INTENT(inout) :: buffer(256)
+    INTEGER, INTENT(inout) :: index
+  END SUBROUTINE generate_moves_pawn
+  SUBROUTINE generate_moves_knight(b, square, buffer, index)
+    USE board_module
+    TYPE(board), INTENT(in) :: b
+    INTEGER, INTENT(in) :: square
+    TYPE(move), INTENT(inout) :: buffer(256)
+    INTEGER, INTENT(inout) :: index
+  END SUBROUTINE generate_moves_knight
+  SUBROUTINE generate_moves_bishop(b, square, buffer, index)
+    USE board_module
+    TYPE(board), INTENT(in) :: b
+    INTEGER, INTENT(in) :: square
+    TYPE(move), INTENT(inout) :: buffer(256)
+    INTEGER, INTENT(inout) :: index
+  END SUBROUTINE generate_moves_bishop
+  SUBROUTINE generate_moves_rook(b, square, buffer, index)
+    USE board_module
+    TYPE(board), INTENT(in) :: b
+    INTEGER, INTENT(in) :: square
+    TYPE(move), INTENT(inout) :: buffer(256)
+    INTEGER, INTENT(inout) :: index
+  END SUBROUTINE generate_moves_rook
+  SUBROUTINE generate_moves_queen(b, square, buffer, index)
+    USE board_module
+    TYPE(board), INTENT(in) :: b
+    INTEGER, INTENT(in) :: square
+    TYPE(move), INTENT(inout) :: buffer(256)
+    INTEGER, INTENT(inout) :: index
+  END SUBROUTINE generate_moves_queen
+  SUBROUTINE generate_moves_king(b, square, buffer, index)
+    USE board_module
+    TYPE(board), INTENT(in) :: b
+    INTEGER, INTENT(in) :: square
+    TYPE(move), INTENT(inout) :: buffer(256)
+    INTEGER, INTENT(inout) :: index
+  END SUBROUTINE generate_moves_king
+
+  FUNCTION generate_moves(b) RESULT(res)
+    USE board_module
+    TYPE(board), INTENT(in) :: b
+    INTEGER :: square, index
+    INTEGER(8) :: own_pieces
+    TYPE(move) :: buffer(256)
+    TYPE(move), ALLOCATABLE :: res(:)
+    index = 1
+    own_pieces = b%combined_bitboard(b%side_to_move)
+    DO square = 0, 63
+       IF (BTEST(own_pieces, square)) THEN
+          SELECT CASE (ABS(b%mailbox(square)))
+          CASE (pawn)
+             CALL generate_moves_pawn(b, square, buffer, index)
+          CASE (knight)
+             CALL generate_moves_knight(b, square, buffer, index)
+          CASE (bishop)
+             CALL generate_moves_bishop(b, square, buffer, index)
+          CASE (rook)
+             CALL generate_moves_rook(b, square, buffer, index)
+          CASE (queen)
+             CALL generate_moves_queen(b, square, buffer, index)
+          CASE (king)
+             CALL generate_moves_king(b, square, buffer, index)
+          END SELECT
+       END  IF
+    END DO
+  END FUNCTION generate_moves
 
 END MODULE move_module
