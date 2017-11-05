@@ -89,75 +89,235 @@ CONTAINS
     CLOSE(29)
   END SUBROUTINE read_attacks
 
-  SUBROUTINE generate_moves_pawn(b, square, buffer, index)
+  SUBROUTINE generate_moves_pawn(b, square, buffer, index, captures_only)
     USE board_module
     TYPE(board), INTENT(in) :: b
-    INTEGER, INTENT(in) :: square
+    INTEGER(1), INTENT(in) :: square
     TYPE(move), INTENT(inout) :: buffer(256)
     INTEGER, INTENT(inout) :: index
+    LOGICAL :: captures_only
+    INTEGER(1) :: forward, double_forward, left_forward, right_forward
+    INTEGER(1) :: color, piece, en_passant
+    color = b%side_to_move
+    forward = square + color
+    double_forward = square + 2 * color
+    en_passant = MERGE(b%en_passant * 8 - MERGE(3, 6, color == white), -1, b%en_passant /= 0)
+    IF (.NOT. captures_only) THEN
+       IF (b%mailbox(forward) == NONE) THEN
+          IF (ISHFT(forward, 3) == MERGE(7, 0, color == white)) THEN
+             buffer(index) = move(square, forward, NONE, queen, .FALSE.)
+             buffer(index + 1) = move(square, forward, NONE, rook, .FALSE.)
+             buffer(index + 2) = move(square, forward, NONE, bishop, .FALSE.)
+             buffer(index + 3) = move(square, forward, NONE, knight, .FALSE.)
+             index = index + 4
+          ELSE
+             buffer(index) = move(square, forward, NONE, NONE, .FALSE.)
+             index = index + 1
+          END IF
+       ENDIF
+    END IF
+    left_forward = MERGE(forward - 8, -1, forward .GE. 8)
+    right_forward = MERGE(forward + 8, -1, forward .LE. 55)
+    IF (left_forward >= 0) THEN
+       piece = b%mailbox(left_forward)
+       IF (piece * color < 0) THEN
+          IF (ISHFT(left_forward, 3) == MERGE(7, 0, color == white)) THEN
+             buffer(index) = move(square, left_forward, piece, queen, .FALSE.)
+             buffer(index + 1) = move(square, left_forward, piece, rook, .FALSE.)
+             buffer(index + 2) = move(square, left_forward, piece, bishop, .FALSE.)
+             buffer(index + 3) = move(square, left_forward, piece, knight, .FALSE.)
+             index = index + 4
+          ELSE
+             buffer(index) = move(square, left_forward, piece, NONE, .FALSE.)
+             index = index + 1
+          END IF
+       END IF
+    END IF
+    IF (right_forward >= 0) THEN
+       piece = b%mailbox(right_forward)
+       IF (piece * color < 0) THEN
+          IF (ISHFT(right_forward, 3) == MERGE(7, 0, color == white)) THEN
+             buffer(index) = move(square, right_forward, piece, queen, .FALSE.)
+             buffer(index + 1) = move(square, right_forward, piece, rook, .FALSE.)
+             buffer(index + 2) = move(square, right_forward, piece, bishop, .FALSE.)
+             buffer(index + 3) = move(square, right_forward, piece, knight, .FALSE.)
+             index = index + 4
+          ELSE
+             buffer(index) = move(square, right_forward, piece, NONE, .FALSE.)
+             index = index + 1
+          END IF
+       END IF
+    END IF
+    ! En passant captures
+    IF (en_passant >= 0) THEN
+       IF (left_forward == en_passant) THEN
+          buffer(index) = move(square, left_forward, -color * pawn, NONE, .TRUE.)
+          index = index + 1
+       END IF
+       IF (right_forward == en_passant) THEN
+          buffer(index) = move(square, right_forward, -color * pawn, NONE, .TRUE.)
+          index = index + 1
+       END IF
+    END IF
+    ! Double-square push
+    IF (ISHFT(square, 3) == MERGE(1, 6, color == white) .AND..NOT. captures_only) THEN
+       IF (b%mailbox(forward) == NONE .AND. b%mailbox(double_forward) == NONE) THEN
+          buffer(index) = move(square, double_forward, NONE, NONE, .FALSE.)
+          index = index + 1
+       END IF
+    END IF
   END SUBROUTINE generate_moves_pawn
-  SUBROUTINE generate_moves_knight(b, square, buffer, index)
+
+  SUBROUTINE generate_moves_knight(b, square, buffer, index, captures_only)
     USE board_module
     TYPE(board), INTENT(in) :: b
-    INTEGER, INTENT(in) :: square
+    INTEGER(1), INTENT(in) :: square
     TYPE(move), INTENT(inout) :: buffer(256)
     INTEGER, INTENT(inout) :: index
+    LOGICAL :: captures_only
+    INTEGER(8) :: needed_squares, pattern
+    INTEGER(1) :: i
+    needed_squares = b%combined_bitboard(-b%side_to_move)
+    IF (.NOT. captures_only) needed_squares = IOR(needed_squares, b%bitboards(NONE))
+    pattern = IAND(knight_patterns(square), needed_squares)
+    DO i = 0, 63
+       IF (BTEST(pattern, i)) THEN
+          buffer(index) = move(square, i, b%mailbox(i), NONE, .FALSE.)
+          index = index + 1
+       END IF
+    END DO
   END SUBROUTINE generate_moves_knight
-  SUBROUTINE generate_moves_bishop(b, square, buffer, index)
+
+  SUBROUTINE generate_moves_bishop(b, square, buffer, index, captures_only)
     USE board_module
+    USE magic_module
     TYPE(board), INTENT(in) :: b
-    INTEGER, INTENT(in) :: square
+    INTEGER(1), INTENT(in) :: square
     TYPE(move), INTENT(inout) :: buffer(256)
     INTEGER, INTENT(inout) :: index
+    LOGICAL :: captures_only
+    INTEGER(8) :: occupied, pattern
+    INTEGER(1) :: i
+    occupied = NOT(b%bitboards(NONE))
+    occupied = IAND(occupied, bishop_magic(square)%mask)
+    occupied = occupied * bishop_magic(square)%magic
+    occupied = ISHFT(occupied, bishop_bits(square) - 64)
+    pattern = bishop_attacks(square, occupied)
+    pattern = IAND(pattern, NOT(b%combined_bitboard(b%side_to_move)))
+    IF (captures_only) pattern = IAND(pattern, NOT(b%bitboards(NONE)))
+    DO i = 0, 63
+       IF (BTEST(pattern, i)) THEN
+          buffer(index) = move(square, i, b%mailbox(i), NONE, .FALSE.)
+          index = index + 1
+       END IF
+    END DO
   END SUBROUTINE generate_moves_bishop
-  SUBROUTINE generate_moves_rook(b, square, buffer, index)
+
+  SUBROUTINE generate_moves_rook(b, square, buffer, index, captures_only)
     USE board_module
+    USE magic_module
     TYPE(board), INTENT(in) :: b
-    INTEGER, INTENT(in) :: square
+    INTEGER(1), INTENT(in) :: square
     TYPE(move), INTENT(inout) :: buffer(256)
     INTEGER, INTENT(inout) :: index
+    LOGICAL :: captures_only
+    INTEGER(8) :: occupied, pattern
+    INTEGER(1) :: i
+    occupied = NOT(b%bitboards(NONE))
+    occupied = IAND(occupied, rook_magic(square)%mask)
+    occupied = occupied * rook_magic(square)%magic
+    occupied = ISHFT(occupied, rook_bits(square) - 64)
+    pattern = rook_attacks(square, occupied)
+    pattern = IAND(pattern, NOT(b%combined_bitboard(b%side_to_move)))
+    IF (captures_only) pattern = IAND(pattern, NOT(b%bitboards(NONE)))
+    DO i = 0, 63
+       IF (BTEST(pattern, i)) THEN
+          buffer(index) = move(square, i, b%mailbox(i), NONE, .FALSE.)
+          index = index + 1
+       END IF
+    END DO
   END SUBROUTINE generate_moves_rook
-  SUBROUTINE generate_moves_queen(b, square, buffer, index)
+
+  SUBROUTINE generate_moves_queen(b, square, buffer, index, captures_only)
     USE board_module
+    USE magic_module
     TYPE(board), INTENT(in) :: b
-    INTEGER, INTENT(in) :: square
+    INTEGER(1), INTENT(in) :: square
     TYPE(move), INTENT(inout) :: buffer(256)
     INTEGER, INTENT(inout) :: index
+    LOGICAL :: captures_only
+    INTEGER(8) :: occupied_rook, occupied_bishop
+    INTEGER(8) :: pattern_rook, pattern_bishop, pattern
+    INTEGER(1) :: i
+    occupied_rook = NOT(b%bitboards(NONE))
+    occupied_rook = IAND(occupied_rook, rook_magic(square)%mask)
+    occupied_rook = occupied_rook * rook_magic(square)%magic
+    occupied_rook = ISHFT(occupied_rook, rook_bits(square) - 64)
+    pattern_rook = rook_attacks(square, occupied_rook)
+    occupied_bishop = NOT(b%bitboards(NONE))
+    occupied_bishop = IAND(occupied_bishop, bishop_magic(square)%mask)
+    occupied_bishop = occupied_bishop * bishop_magic(square)%magic
+    occupied_bishop = ISHFT(occupied_bishop, bishop_bits(square) - 64)
+    pattern_bishop = bishop_attacks(square, occupied_bishop)
+    pattern = IOR(pattern_rook, pattern_bishop)
+    pattern = IAND(pattern, NOT(b%combined_bitboard(b%side_to_move)))
+    IF (captures_only) pattern = IAND(pattern, NOT(b%bitboards(NONE)))
+    DO i = 0, 63
+       IF (BTEST(pattern, i)) THEN
+          buffer(index) = move(square, i, b%mailbox(i), NONE, .FALSE.)
+          index = index + 1
+       END IF
+    END DO
   END SUBROUTINE generate_moves_queen
-  SUBROUTINE generate_moves_king(b, square, buffer, index)
+
+  SUBROUTINE generate_moves_king(b, square, buffer, index, captures_only)
     USE board_module
     TYPE(board), INTENT(in) :: b
-    INTEGER, INTENT(in) :: square
+    INTEGER(1), INTENT(in) :: square
     TYPE(move), INTENT(inout) :: buffer(256)
     INTEGER, INTENT(inout) :: index
+    LOGICAL :: captures_only
+    INTEGER(8) :: needed_squares, pattern
+    INTEGER(1) :: i
+    needed_squares = b%combined_bitboard(-b%side_to_move)
+    IF (.NOT. captures_only) needed_squares = IOR(needed_squares, b%bitboards(NONE))
+    pattern = IAND(king_patterns(square), needed_squares)
+    DO i = 0, 63
+       IF (BTEST(pattern, i)) THEN
+          buffer(index) = move(square, i, b%mailbox(i), NONE, .FALSE.)
+          index = index + 1
+       END IF
+    END DO
   END SUBROUTINE generate_moves_king
 
-  FUNCTION generate_moves(b) RESULT(res)
+  FUNCTION generate_moves(b, captures_only) RESULT(res)
     USE board_module
     TYPE(board), INTENT(in) :: b
-    INTEGER :: square, index
+    INTEGER(1) :: square
+    INTEGER :: index
     INTEGER(8) :: own_pieces
     TYPE(move) :: buffer(256)
     TYPE(move), ALLOCATABLE :: res(:)
+    LOGICAL :: captures_only
     index = 1
     own_pieces = b%combined_bitboard(b%side_to_move)
     DO square = 0, 63
        IF (BTEST(own_pieces, square)) THEN
           SELECT CASE (ABS(b%mailbox(square)))
           CASE (pawn)
-             CALL generate_moves_pawn(b, square, buffer, index)
+             CALL generate_moves_pawn(b, square, buffer, index, captures_only)
           CASE (knight)
-             CALL generate_moves_knight(b, square, buffer, index)
+             CALL generate_moves_knight(b, square, buffer, index, captures_only)
           CASE (bishop)
-             CALL generate_moves_bishop(b, square, buffer, index)
+             CALL generate_moves_bishop(b, square, buffer, index, captures_only)
           CASE (rook)
-             CALL generate_moves_rook(b, square, buffer, index)
+             CALL generate_moves_rook(b, square, buffer, index, captures_only)
           CASE (queen)
-             CALL generate_moves_queen(b, square, buffer, index)
+             CALL generate_moves_queen(b, square, buffer, index, captures_only)
           CASE (king)
-             CALL generate_moves_king(b, square, buffer, index)
+             CALL generate_moves_king(b, square, buffer, index, captures_only)
           END SELECT
-       END  IF
+       END IF
     END DO
   END FUNCTION generate_moves
 
