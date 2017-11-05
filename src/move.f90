@@ -1,4 +1,5 @@
 MODULE move_module
+  IMPLICIT NONE
 
   INTEGER(8), PARAMETER :: king_patterns(64) = [ &
        Z"0000000000000302", Z"0000000000000705", Z"0000000000000e0a", &
