@@ -1,7 +1,7 @@
 MODULE move_module
   IMPLICIT NONE
 
-  INTEGER(8), PARAMETER :: king_patterns(64) = [ &
+  INTEGER(8), PARAMETER :: king_patterns(0:63) = [ &
        Z"0000000000000302", Z"0000000000000705", Z"0000000000000e0a", &
        Z"0000000000001c14", Z"0000000000003828", Z"0000000000007050", &
        Z"000000000000e0a0", Z"000000000000c040", Z"0000000000030203", &
@@ -25,7 +25,7 @@ MODULE move_module
        Z"2838000000000000", Z"5070000000000000", Z"a0e0000000000000", &
        Z"40c0000000000000"]
 
-  INTEGER(8), PARAMETER :: knight_patterns(64) = [ &
+  INTEGER(8), PARAMETER :: knight_patterns(0:63) = [ &
        Z"0000000000020400", Z"0000000000050800", Z"00000000000a1100", &
        Z"0000000000142200", Z"0000000000284400", Z"0000000000508800", &
        Z"0000000000a01000", Z"0000000000402000", Z"0000000002040004", &
@@ -49,7 +49,7 @@ MODULE move_module
        Z"0044280000000000", Z"0088500000000000", Z"0010a00000000000", &
        Z"0020400000000000"]
 
-  INTEGER, PARAMETER :: rook_bits(64) = [ &
+  INTEGER, PARAMETER :: rook_bits(0:63) = [ &
        12, 11, 11, 11, 11, 11, 11, 12, &
        11, 10, 10, 10, 10, 10, 10, 11, &
        11, 10, 10, 10, 10, 10, 10, 11, &
@@ -59,7 +59,7 @@ MODULE move_module
        11, 10, 10, 10, 10, 10, 10, 11, &
        12, 11, 11, 11, 11, 11, 11, 12]
 
-  INTEGER, PARAMETER :: bishop_bits(64) = [&
+  INTEGER, PARAMETER :: bishop_bits(0:63) = [&
        6, 5, 5, 5, 5, 5, 5, 6, &
        5, 5, 5, 5, 5, 5, 5, 5, &
        5, 5, 7, 7, 7, 7, 5, 5, &
@@ -291,9 +291,9 @@ CONTAINS
     INTEGER(1) :: square
     INTEGER :: index, legal_index, i
     INTEGER(8) :: own_pieces
-    TYPE(move) :: buffer(256), legal_buffer(256)
+    TYPE(move) :: buffer(256), legal_buffer(256), m
     TYPE(move), ALLOCATABLE :: res(:)
-    TYPE(board), ALLOCATABLE :: child
+    TYPE(board) :: child
     LOGICAL :: captures_only
     INTEGER(1) :: king_square, target_square
     INTEGER(8) :: mask, free_squares
@@ -372,7 +372,8 @@ CONTAINS
     queenside_through_check = .FALSE.
     checked = checking_pieces(b) /= 0
     DO i = 1, index
-       child = b%make_move(buffer(i))
+       m = buffer(i)
+       child = b%make_move(m)
        child%side_to_move = -child%side_to_move
        legal = (checking_pieces(child) /= 0)
        child%side_to_move = -child%side_to_move
@@ -400,9 +401,8 @@ CONTAINS
        if (illegal_castling) legal = .FALSE.
        if (legal) THEN
          legal_buffer(legal_index) = buffer(i)
-         legal_index = legal_index - 1
+         legal_index = legal_index + 1
        end if
-       deallocate(child)
     END DO
     legal_index = legal_index - 1 ! Number of legal moves
     allocate(res(1:legal_index))

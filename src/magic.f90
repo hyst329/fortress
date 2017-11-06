@@ -4,7 +4,7 @@ MODULE magic_module
      INTEGER(8) :: mask, magic
   END TYPE masked_magic
 
-  TYPE(masked_magic), PARAMETER :: rook_magic(64) = [&
+  TYPE(masked_magic), PARAMETER :: rook_magic(0:63) = [&
        masked_magic(Z"000101010101017E", Z"0080004000976080"),&
        masked_magic(Z"000202020202027C", Z"1040400010002000"),&
        masked_magic(Z"000404040404047A", Z"4880200210000980"),&
@@ -69,7 +69,7 @@ MODULE magic_module
        masked_magic(Z"5E20202020202000", Z"480D000400820801"),&
        masked_magic(Z"3E40404040404000", Z"0820104201280084"),&
        masked_magic(Z"7E80808080808000", Z"1001040311802142")]
-  TYPE(masked_magic), PARAMETER :: bishop_magic(64) = [&
+  TYPE(masked_magic), PARAMETER :: bishop_magic(0:63) = [&
        masked_magic(Z"0040201008040200", Z"001024B002420160"),&
        masked_magic(Z"0000402010080400", Z"1008080140420021"),&
        masked_magic(Z"0000004020100A00", Z"2012080041080024"),&
