@@ -22,6 +22,11 @@ MODULE board_module
      PROCEDURE :: combined_bitboard
   END TYPE board
 
+  TYPE move
+     INTEGER(1) :: from_square, to_square, captured_piece, promoted_piece
+     LOGICAL :: en_passant
+  END TYPE move
+
 CONTAINS
   FUNCTION generate_random_int64() RESULT(res)
     INTEGER(8) :: res
@@ -35,12 +40,6 @@ CONTAINS
     END DO
   END FUNCTION generate_random_int64
 
-  SUBROUTINE initialise
-    USE move_module
-    CALL initialise_zobrist_tables
-    CALL read_attacks
-  END SUBROUTINE initialise
-
   SUBROUTINE initialise_zobrist_tables
     INTEGER :: i, j
     DO i = 0, 63
@@ -51,9 +50,8 @@ CONTAINS
   END SUBROUTINE initialise_zobrist_tables
 
   FUNCTION make_move(this, m) RESULT(child)
-    USE move_module
     CLASS(board), VALUE :: this
-    CLASS(move), INTENT(in) :: m
+    TYPE(move), INTENT(in) :: m
     CLASS(board), ALLOCATABLE :: child
     INTEGER(1) :: piece, rook_square, rook_piece, new_rook_square, actual_pawn_square
     INTEGER(1) :: promoted_piece, captured_piece

@@ -71,11 +71,6 @@ MODULE move_module
 
   INTEGER(8) :: rook_attacks(0:63, 0:4095), bishop_attacks(0:63, 0:511)
 
-  TYPE move
-     INTEGER(1) :: from_square, to_square, captured_piece, promoted_piece
-     LOGICAL :: en_passant
-  END TYPE move
-
 CONTAINS
   SUBROUTINE read_attacks()
     INTEGER :: i
@@ -294,13 +289,18 @@ CONTAINS
     USE board_module
     TYPE(board), INTENT(in) :: b
     INTEGER(1) :: square
-    INTEGER :: index
+    INTEGER :: index, legal_index, i
     INTEGER(8) :: own_pieces
-    TYPE(move) :: buffer(256)
+    TYPE(move) :: buffer(256), legal_buffer(256)
     TYPE(move), ALLOCATABLE :: res(:)
+    TYPE(board), ALLOCATABLE :: child
     LOGICAL :: captures_only
+    INTEGER(1) :: king_square, target_square
+    INTEGER(8) :: mask, free_squares
+    LOGICAL :: legal, checked, kingside_through_check, queenside_through_check, illegal_castling
     index = 1
     own_pieces = b%combined_bitboard(b%side_to_move)
+    free_squares = b%bitboards(NONE)
     DO square = 0, 63
        IF (BTEST(own_pieces, square)) THEN
           SELECT CASE (ABS(b%mailbox(square)))
@@ -319,6 +319,137 @@ CONTAINS
           END SELECT
        END IF
     END DO
+    ! Castling
+    IF (.NOT. captures_only) THEN
+       IF (b%side_to_move == white) THEN
+          IF (BTEST(b%castling_rights, 3)) THEN
+             ! White can castle queenside
+             king_square = 32
+             target_square = 16
+             mask = INT(Z"0000000001010100")
+             IF (IAND(free_squares, mask) == mask) THEN
+                buffer(index) = move(king_square, target_square, NONE, NONE, .FALSE.)
+                index = index + 1
+             END IF
+          END IF
+          IF (BTEST(b%castling_rights, 2)) THEN
+             ! White can castle kingside
+             king_square = 32
+             target_square = 48
+             mask = INT(Z"0001010000000000")
+             IF (IAND(free_squares, mask) == mask) THEN
+                buffer(index) = move(king_square, target_square, NONE, NONE, .FALSE.)
+                index = index + 1
+             END IF
+          END IF
+       ELSE
+          IF (BTEST(b%castling_rights, 1)) THEN
+             ! Black can castle queenside
+             king_square = 39
+             target_square = 23
+             mask = INT(Z"0000000080808000")
+             IF (IAND(free_squares, mask) == mask) THEN
+                buffer(index) = move(king_square, target_square, NONE, NONE, .FALSE.)
+                index = index + 1
+             END IF
+          END IF
+          IF (BTEST(b%castling_rights, 0)) THEN
+             ! Black can castle kingside
+             king_square = 39
+             target_square = 55
+             mask = INT(Z"0080800000000000")
+             IF (IAND(free_squares, mask) == mask) THEN
+                buffer(index) = move(king_square, target_square, NONE, NONE, .FALSE.)
+                index = index + 1
+             END IF
+          END IF
+       END IF
+    END IF
+    ! Check for legality
+    index = index - 1 ! Number of pseudo-legal moves
+    legal_index = 1
+    kingside_through_check = .FALSE.
+    queenside_through_check = .FALSE.
+    checked = checking_pieces(b) /= 0
+    DO i = 1, index
+       child = b%make_move(buffer(i))
+       child%side_to_move = -child%side_to_move
+       legal = (checking_pieces(child) /= 0)
+       child%side_to_move = -child%side_to_move
+       kingside_through_check = kingside_through_check .OR. &
+            (buffer(i)%from_square == MERGE(32, 39, b%side_to_move == white) .AND. &
+            buffer(i)%to_square == MERGE(40, 47, b%side_to_move == white) .AND. &
+            BTEST(b%castling_rights, MERGE(2, 0, b%side_to_move == white)) .AND. &
+            .NOT. legal)
+       queenside_through_check = queenside_through_check .OR. &
+            (buffer(i)%from_square == MERGE(32, 39, b%side_to_move == white) .AND. &
+            buffer(i)%to_square == MERGE(24, 31, b%side_to_move == white) .AND. &
+            BTEST(b%castling_rights, MERGE(3, 1, b%side_to_move == white)) .AND. &
+            .NOT. legal)
+       illegal_castling = &
+            (buffer(i)%from_square == MERGE(32, 39, b%side_to_move == white) .AND. &
+            buffer(i)%to_square == MERGE(48, 55, b%side_to_move == white) .AND. &
+            ABS(b%mailbox(buffer(i)%from_square)) == king .AND. &
+            (kingside_through_check .or. checked))
+       if (illegal_castling) legal = .FALSE.
+       illegal_castling = &
+            (buffer(i)%from_square == MERGE(32, 39, b%side_to_move == white) .AND. &
+            buffer(i)%to_square == MERGE(16, 23, b%side_to_move == white) .AND. &
+            ABS(b%mailbox(buffer(i)%from_square)) == king .AND. &
+            (queenside_through_check .or. checked))
+       if (illegal_castling) legal = .FALSE.
+       if (legal) THEN
+         legal_buffer(legal_index) = buffer(i)
+         legal_index = legal_index - 1
+       end if
+       deallocate(child)
+    END DO
+    legal_index = legal_index - 1 ! Number of legal moves
+    allocate(res(1:legal_index))
+    res = legal_buffer(1:legal_index)
   END FUNCTION generate_moves
+
+  FUNCTION checking_pieces(b)
+    USE board_module
+    USE magic_module
+    TYPE(board), INTENT(in) :: b
+    INTEGER(8) :: checking_pieces
+    INTEGER(8) :: king_bitboard
+    INTEGER(1) :: king_square, enemy_king_square, color
+    INTEGER(8) :: enemy_queens_bitboard, enemy_rooks_bitboard, enemy_bishops_bitboard
+    INTEGER(8) :: enemy_knights_bitboard, enemy_pawns_bitboard, enemy_king_bitboard
+    INTEGER(8) :: occupied
+    INTEGER(1) :: backward, left_backward, right_backward
+    INTEGER(8) :: left_backward_bitboard, right_backward_bitboard
+    checking_pieces = 0
+    color = b%side_to_move
+    king_bitboard = b%bitboards(color * king)
+    king_square = TRAILZ(king_bitboard)
+    enemy_king_bitboard = b%bitboards(-color * king)
+    enemy_king_square = TRAILZ(enemy_king_bitboard)
+    occupied = 0
+    enemy_rooks_bitboard = b%bitboards(-color * rook)
+    enemy_bishops_bitboard = b%bitboards(-color * bishop)
+    enemy_queens_bitboard = b%bitboards(-color * queen)
+    occupied = NOT(b%bitboards(NONE))
+    occupied = IAND(occupied, rook_magic(king_square)%mask)
+    occupied = occupied * rook_magic(king_square)%magic
+    occupied = ISHFT(occupied, rook_bits(king_square) - 64)
+    checking_pieces = IOR(checking_pieces, IAND(rook_attacks(king_square, occupied), &
+         IOR(enemy_rooks_bitboard, enemy_queens_bitboard)))
+    occupied = IAND(occupied, bishop_magic(king_square)%mask)
+    occupied = occupied * bishop_magic(king_square)%magic
+    occupied = ISHFT(occupied, bishop_bits(king_square) - 64)
+    checking_pieces = IOR(checking_pieces, IAND(bishop_attacks(king_square, occupied), &
+         IOR(enemy_bishops_bitboard, enemy_queens_bitboard)))
+    checking_pieces = IOR(checking_pieces, IAND(king_patterns(enemy_king_square), king_bitboard))
+    checking_pieces = IOR(checking_pieces, IAND(knight_patterns(king_square), enemy_knights_bitboard))
+    backward = king_square + color
+    left_backward = MERGE(backward - 8, -1, backward .GE. 8)
+    right_backward = MERGE(backward + 8, -1, backward .LE. 55)
+    left_backward_bitboard = MERGE(ISHFT(1_8, left_backward), 0_8, left_backward .GE. 0)
+    right_backward_bitboard = MERGE(ISHFT(1_8, right_backward), 0_8, right_backward .GE. 0)
+    checking_pieces = IOR(checking_pieces, IAND(IOR(left_backward_bitboard, right_backward_bitboard), enemy_pawns_bitboard))
+  END FUNCTION checking_pieces
 
 END MODULE move_module
