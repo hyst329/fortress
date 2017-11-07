@@ -90,7 +90,7 @@ CONTAINS
     CHARACTER(4) :: move_number_str
     INTEGER :: halfmove_counter, move_number
     TYPE(board) :: new_board
-    INTEGER :: index, i
+    INTEGER :: index, i, j, d
     INTEGER(1) :: file, rank
     new_board = create_empty_board()
     ! Parse FEN
@@ -143,7 +143,11 @@ CONTAINS
           file = 1
           rank = rank - 1
        CASE ("1":"8")
-          file = file + ICHAR(tfen(i:i)) - ICHAR("0")
+          d = ICHAR(tfen(i:i)) - ICHAR("0")
+          DO j = 1, d
+             CALL new_board%set_piece(INT(file * 8 + rank - 9, 1), NONE)
+             file = file + 1
+          END DO
        END SELECT
     END DO
     SELECT CASE (color)
@@ -195,6 +199,10 @@ CONTAINS
        END DO
        WRITE (unit, fmt=*, iostat=iostat, iomsg=iomsg) NEW_LINE("0")
     END DO
+    DO p = -6, 6
+       WRITE (unit, fmt="(I8, B66.64)", iostat=iostat, iomsg=iomsg) p, dtv%bitboards(p)
+       WRITE (unit, fmt=*, iostat=iostat, iomsg=iomsg) NEW_LINE("0")
+    END DO
   END SUBROUTINE write_board
 
   SUBROUTINE write_move(dtv, unit, iotype, v_list, iostat, iomsg)
@@ -205,10 +213,10 @@ CONTAINS
     INTEGER, INTENT(out) :: iostat
     CHARACTER(*), INTENT(inout) :: iomsg
     CHARACTER(1) :: file1, rank1, file2, rank2
-    file1 = achar(ichar("a") + ISHFT(dtv%from_square, -3_1))
-    rank1 = achar(ichar("1") + IAND(dtv%from_square, 7_1))
-    file2 = achar(ichar("a") + ISHFT(dtv%to_square, -3_1))
-    rank2 = achar(ichar("1") + IAND(dtv%to_square, 7_1))
+    file1 = ACHAR(ICHAR("a") + ISHFT(dtv%from_square, -3_1))
+    rank1 = ACHAR(ICHAR("1") + IAND(dtv%from_square, 7_1))
+    file2 = ACHAR(ICHAR("a") + ISHFT(dtv%to_square, -3_1))
+    rank2 = ACHAR(ICHAR("1") + IAND(dtv%to_square, 7_1))
     WRITE (unit, fmt="(4A1)", iostat=iostat, iomsg=iomsg) file1, rank1, file2, rank2
   END SUBROUTINE write_move
 
@@ -280,12 +288,12 @@ CONTAINS
 
   SUBROUTINE set_piece(this, square, piece)
     CLASS(board), INTENT(inout) :: this
-    INTEGER(1) :: square, piece
+    INTEGER(1), INTENT(in) :: square, piece
     INTEGER(1) :: old_piece
     old_piece = this%mailbox(square)
-    this%bitboards(old_piece) = IAND(this%bitboards(old_piece), NOT(ISHFT(1_8, square)))
-    this%bitboards(NONE) = IAND(this%bitboards(NONE), NOT(ISHFT(1_8, square)))
-    this%bitboards(piece) = IOR(this%bitboards(NONE), ISHFT(1_8, square))
+    this%bitboards(old_piece) = IBCLR(this%bitboards(old_piece), square)
+    this%bitboards(NONE) = IBCLR(this%bitboards(NONE), square)
+    this%bitboards(piece) = IBSET(this%bitboards(piece), square)
     this%hash = IEOR(this%hash, zobrist_tables(square, old_piece))
     this%hash = IEOR(this%hash, zobrist_tables(square, piece))
     this%mailbox(square) = piece
@@ -297,7 +305,7 @@ CONTAINS
     INTEGER(8) :: res
     res = 0
     DO i = pawn, king
-       res = IOR(res, this%bitboards(color * king))
+       res = IOR(res, this%bitboards(color * i))
     END DO
   END FUNCTION combined_bitboard
 

@@ -155,7 +155,7 @@ CONTAINS
        END IF
     END IF
     ! Double-square push
-    IF (ISHFT(square, 3) == MERGE(1, 6, color == white) .AND..NOT. captures_only) THEN
+    IF (ISHFT(square, -3) == MERGE(1, 6, color == white) .AND..NOT. captures_only) THEN
        IF (b%mailbox(forward) == NONE .AND. b%mailbox(double_forward) == NONE) THEN
           buffer(index) = move(square, double_forward, NONE, NONE, .FALSE.)
           index = index + 1
@@ -300,22 +300,29 @@ CONTAINS
     LOGICAL :: legal, checked, kingside_through_check, queenside_through_check, illegal_castling
     index = 1
     own_pieces = b%combined_bitboard(b%side_to_move)
+    print "(B64.64)", own_pieces
     free_squares = b%bitboards(NONE)
     DO square = 0, 63
        IF (BTEST(own_pieces, square)) THEN
           SELECT CASE (ABS(b%mailbox(square)))
           CASE (pawn)
              CALL generate_moves_pawn(b, square, buffer, index, captures_only)
+             print *, square, "pawn, index =", index
           CASE (knight)
              CALL generate_moves_knight(b, square, buffer, index, captures_only)
+             print *, square, "knight, index =", index
           CASE (bishop)
              CALL generate_moves_bishop(b, square, buffer, index, captures_only)
+             print *, square, "bishop, index =", index
           CASE (rook)
              CALL generate_moves_rook(b, square, buffer, index, captures_only)
+             print *, square, "rook, index =", index
           CASE (queen)
              CALL generate_moves_queen(b, square, buffer, index, captures_only)
+             print *, square, "queen, index =", index
           CASE (king)
              CALL generate_moves_king(b, square, buffer, index, captures_only)
+             print *, square, "king, index =", index
           END SELECT
        END IF
     END DO
@@ -367,6 +374,7 @@ CONTAINS
     END IF
     ! Check for legality
     index = index - 1 ! Number of pseudo-legal moves
+    print *, index, "moves generated"
     legal_index = 1
     kingside_through_check = .FALSE.
     queenside_through_check = .FALSE.
