@@ -8,7 +8,7 @@ PROGRAM hello
   b = board("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
   PRINT *, b
   PRINT "(A)", "Fortress v0.0 by trolley.813"
-  DO depth = 1, 6
+  DO depth = 1, 2
      p = perft(b, depth)
      PRINT *, "depth = ", depth, " p = ", p
   END DO

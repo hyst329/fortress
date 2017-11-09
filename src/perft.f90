@@ -22,9 +22,10 @@ CONTAINS
       return
     end if
     res = 0
-    do i = lbound(moves, 1), ubound(moves, 1)
+    do i = 1, size(moves)!lbound(moves, 1), ubound(moves, 1)
       print *, moves(i)
       child = b%make_move(moves(i))
+      print *, child
       res = res + perft(child, depth - 1)
     end do
   END FUNCTION perft

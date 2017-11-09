@@ -155,7 +155,7 @@ CONTAINS
        END IF
     END IF
     ! Double-square push
-    IF (ISHFT(square, -3) == MERGE(1, 6, color == white) .AND..NOT. captures_only) THEN
+    IF (IBITS(square, 0, 3) == MERGE(1, 6, color == white) .AND..NOT. captures_only) THEN
        IF (b%mailbox(forward) == NONE .AND. b%mailbox(double_forward) == NONE) THEN
           buffer(index) = move(square, double_forward, NONE, NONE, .FALSE.)
           index = index + 1
@@ -300,7 +300,6 @@ CONTAINS
     LOGICAL :: legal, checked, kingside_through_check, queenside_through_check, illegal_castling
     index = 1
     own_pieces = b%combined_bitboard(b%side_to_move)
-    print "(B64.64)", own_pieces
     free_squares = b%bitboards(NONE)
     DO square = 0, 63
        IF (BTEST(own_pieces, square)) THEN
@@ -381,9 +380,10 @@ CONTAINS
     checked = checking_pieces(b) /= 0
     DO i = 1, index
        m = buffer(i)
+       print *, m
        child = b%make_move(m)
        child%side_to_move = -child%side_to_move
-       legal = (checking_pieces(child) /= 0)
+       legal = (checking_pieces(child) == 0)
        child%side_to_move = -child%side_to_move
        kingside_through_check = kingside_through_check .OR. &
             (buffer(i)%from_square == MERGE(32, 39, b%side_to_move == white) .AND. &
@@ -413,6 +413,7 @@ CONTAINS
        end if
     END DO
     legal_index = legal_index - 1 ! Number of legal moves
+    print *, legal_index, "legal moves generated"
     allocate(res(1:legal_index))
     res = legal_buffer(1:legal_index)
   END FUNCTION generate_moves
